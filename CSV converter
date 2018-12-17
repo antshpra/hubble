@@ -1,0 +1,122 @@
+function myFunction() {
+
+  var ts = new Date().getTime();
+  
+  var configSheet = SpreadsheetApp.getActiveSheet();
+  if(configSheet.getName() != 'CONFIG') return;
+
+  var config = configSheet.getRange(1, 2, 12, 1).getValues();
+
+  var INPUT_SHEET        = config[0][0];
+  var OUTPUT_SHEET       = config[1][0];
+  var HEAD_ROWS          = config[2][0];
+  var SKU_COL            = config[3][0].charCodeAt(0) - 65;
+  var COLOR_COL          = config[4][0].charCodeAt(0) - 65;
+  var SIZE_COL           = config[5][0].charCodeAt(0) - 65;
+  var PRICE_COL          = config[6][0].charCodeAt(0) - 65;
+  var WEIGHT_COL         = config[7][0].charCodeAt(0) - 65;
+  var SPLIT_COLS         = config[8][0];
+  var CUSTOM_DUTY        = config[9][0];
+  var GST_RATE           = config[10][0];
+  var PUSH_BUTTON        = config[11][0];
+  var INDEX_PUSH_BUTTON  = 12;
+  var INDEX_OUTPUT_COUNT = 13;
+  var INDEX_INPUT_COUNT  = 14;
+  
+  if(PUSH_BUTTON != 'START') return;
+
+  
+  // Updating config - IN_PROGRESS
+  configSheet.getRange(INDEX_PUSH_BUTTON, 2, 4, 1).setValues([['IN_PROGRESS'], [0], [0], [0]]);
+
+
+  // Input Sheet  
+  var inputSheet = SpreadsheetApp.getActive().getSheetByName(INPUT_SHEET);
+  
+  var numRows = inputSheet.getMaxRows();
+  var numCols = inputSheet.getMaxColumns();
+  
+  var input = inputSheet.getRange(1, 1, numRows, numCols).getValues();
+  
+  var colsToSplit = SPLIT_COLS.trim().split(',');
+  var indexesToSplit = [];
+  for(var i = 0; i < colsToSplit.length; i++) {
+    var col = colsToSplit[i].trim();
+    if(col)
+      indexesToSplit.push(col.charCodeAt(0) - 65);
+  }
+
+
+  // Output Sheet
+  var outputSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(OUTPUT_SHEET);
+  outputSheet.clear();
+  var count = 0;
+
+  for(var i = 0; i < input.length; i++) {
+    var row = input[i];
+    if(i < HEAD_ROWS) { // Directly inject head rows
+      row.push('Price');
+      outputSheet.appendRow(row);
+      count++;
+    } else if(! row[0]) break; // Skip empty rows
+    else {
+      var subInput = [row];
+      var subOutput = [];
+      for(var j = 0; j < indexesToSplit.length; j++) { // Looping by indexesToSplit
+        for(var k = 0; k < subInput.length; k++) {
+          var variants = subInput[k][indexesToSplit[j]].trim().split(',');
+          for(var l = 0; l < variants.length; l++) {
+            var variant = variants[l].trim();
+            if(! variant) continue;
+            var newRow = subInput[k].slice();
+            newRow[indexesToSplit[j]] = variant;
+            subOutput.push(newRow);
+          }
+        }
+        subInput = subOutput;
+        subOutput = [];
+      }
+      for(var j = 0; j < subInput.length; j++) {
+        var airRow = subInput[j];
+        var shipRow = airRow.slice();
+        
+        airRow[SKU_COL] = airRow[SKU_COL] + '_' + airRow[COLOR_COL] + '_' + airRow[SIZE_COL] + '_Air';
+        airRow[SKU_COL] = airRow[SKU_COL].replace(/ /gi, '_');
+        
+        shipRow[SKU_COL] = shipRow[SKU_COL] + '_' + shipRow[COLOR_COL] + '_' + shipRow[SIZE_COL] + '_Ship';
+        shipRow[SKU_COL] = shipRow[SKU_COL].replace(/ /gi, '_');
+        
+        airRow.push(getLandedPrice(airRow[PRICE_COL], airRow[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, 'Air'));
+        shipRow.push(getLandedPrice(shipRow[PRICE_COL], shipRow[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, 'Ship'));
+      
+        subOutput.push(airRow);
+        subOutput.push(shipRow);
+      }
+      outputSheet.getRange(count + 1, 1, subOutput.length, subOutput[0].length).setValues(subOutput);
+      count = count + subOutput.length;
+      configSheet.getRange(INDEX_PUSH_BUTTON, 2, 4, 1).setValues([['IN_PROGRESS'], [i], [count], [(new Date().getTime() - ts)/1000 + 's']]);
+    }
+  }
+  
+  configSheet.getRange(INDEX_PUSH_BUTTON, 2, 1, 1).setValues([['DONE']]);
+
+}
+
+
+function getLandedPrice(price, weight, customDuty, gst, mode) {
+  
+  var inrPrice = price * 10.5;
+  var fni = mode == 'Air'
+      ? Math.max(weight, 400) / 1000 * 300 // Air Freight & Insurance
+      : weight / 1000 * 40;                // Other (Ship) Freight & Insurance
+  var landing = 0.01 * (inrPrice + fni);   // Landing Charges
+
+  var cif = inrPrice + fni + landing;      // Cost + Insurance + Freight
+  var custom = cif * customDuty/100 * 1.1; // Basic Custom Duty + Cess
+  var igst = (cif + custom) * gst/100;     // GST
+  
+  var commission = 0.1 * inrPrice;         // Our Commission
+  
+  return Math.ceil(cif + custom + igst + commission);
+  
+}
