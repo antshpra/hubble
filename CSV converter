@@ -5,7 +5,7 @@ function myFunction() {
   var configSheet = SpreadsheetApp.getActiveSheet();
   if(configSheet.getName() != 'CONFIG') return;
 
-  var config = configSheet.getRange(1, 2, 12, 1).getValues();
+  var config = configSheet.getRange(1, 2, configSheet.getMaxRows(), 1).getValues();
 
   var INPUT_SHEET        = config[0][0];
   var OUTPUT_SHEET       = config[1][0];
@@ -15,13 +15,17 @@ function myFunction() {
   var SIZE_COL           = config[5][0].charCodeAt(0) - 65;
   var PRICE_COL          = config[6][0].charCodeAt(0) - 65;
   var WEIGHT_COL         = config[7][0].charCodeAt(0) - 65;
-  var SPLIT_COLS         = config[8][0];
-  var CUSTOM_DUTY        = config[9][0];
-  var GST_RATE           = config[10][0];
-  var PUSH_BUTTON        = config[11][0];
-  var INDEX_PUSH_BUTTON  = 12;
-  var INDEX_OUTPUT_COUNT = 13;
-  var INDEX_INPUT_COUNT  = 14;
+  var IMAGE_COL          = config[8][0].charCodeAt(0) - 65;
+  var SPLIT_COLS         = config[9][0];
+  var VENDOR             = config[10][0];
+  var TYPE               = config[11][0];
+  var TAG                = config[12][0];
+  var CUSTOM_DUTY        = config[13][0];
+  var GST_RATE           = config[14][0];
+  var PUSH_BUTTON        = config[15][0];
+  var INDEX_PUSH_BUTTON  = 16;
+  var INDEX_OUTPUT_COUNT = 17;
+  var INDEX_INPUT_COUNT  = 18;
   
   if(PUSH_BUTTON != 'START') return;
 
@@ -55,8 +59,24 @@ function myFunction() {
   for(var i = 0; i < input.length; i++) {
     var row = input[i];
     if(i < HEAD_ROWS) { // Directly inject head rows
-      row.push('Price');
-      outputSheet.appendRow(row);
+      row.splice(3, 0, 'Vendor');
+      row.splice(4, 0, 'Type');
+      row.splice(5, 0, 'Tag');
+      row.splice(6, 0, 'Published');
+      row.splice(7, 0, 'Option 1 Name');
+      row.splice(8, 0, 'Option 1 Value');
+      row.splice(12, 0, 'Option 2 Name');
+      row.splice(14, 0, 'Option 3 Name');
+      row.splice(19, 0, 'Variant Inventory Policy');
+      row.splice(20, 0, 'Inventory Qty');
+      row.splice(21, 0, 'Variant Fulfillment Service');
+      row.splice(22, 0, 'Variant Requires Shipping'); 
+      row.splice(23, 0, 'Variant Taxable');
+      row.splice(24, 0, 'Google Shopping / MPN');
+      row.splice(25, 0, 'Variant Price');
+      row.splice(26, 0, 'Variant Compare At Price');
+      row.splice(29, 0, 'Image Position');
+      outputSheet.appendRow(row.slice(0, 30));
       count++;
     } else if(! row[0]) break; // Skip empty rows
     else {
@@ -77,21 +97,64 @@ function myFunction() {
         subOutput = [];
       }
       for(var j = 0; j < subInput.length; j++) {
-        var airRow = subInput[j];
-        var shipRow = airRow.slice();
+        var shipRow = subInput[j];
+        var airRow = shipRow.slice();
         
-        airRow[SKU_COL] = airRow[SKU_COL] + '_' + airRow[COLOR_COL] + '_' + airRow[SIZE_COL] + '_Air';
-        airRow[SKU_COL] = airRow[SKU_COL].replace(/ /gi, '_');
-        
-        shipRow[SKU_COL] = shipRow[SKU_COL] + '_' + shipRow[COLOR_COL] + '_' + shipRow[SIZE_COL] + '_Ship';
+        shipRow[SKU_COL] = shipRow[SKU_COL] + '_' + shipRow[COLOR_COL] + '_' + shipRow[SIZE_COL] + '_eta40days';
         shipRow[SKU_COL] = shipRow[SKU_COL].replace(/ /gi, '_');
         
-        airRow.push(getLandedPrice(airRow[PRICE_COL], airRow[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, 'Air'));
-        shipRow.push(getLandedPrice(shipRow[PRICE_COL], shipRow[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, 'Ship'));
+        airRow[SKU_COL] = airRow[SKU_COL] + '_' + airRow[COLOR_COL] + '_' + airRow[SIZE_COL] + '_eta14days';
+        airRow[SKU_COL] = airRow[SKU_COL].replace(/ /gi, '_');
+        
+        var shipPrice = getLandedPrice(shipRow[PRICE_COL], shipRow[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, 'Ship');
+        shipRow.splice(3, 0, VENDOR);
+        shipRow.splice(4, 0, TYPE);
+        shipRow.splice(5, 0, TAG);
+        shipRow.splice(6, 0, 'TRUE');
+        shipRow.splice(7, 0, 'Delivery Type');
+        shipRow.splice(8, 0, 'ETA 40 Days');
+        shipRow.splice(12, 0, 'Color');
+        shipRow.splice(14, 0, 'Size');
+        shipRow.splice(19, 0, 'deny');
+        shipRow.splice(20, 0, '10000');
+        shipRow.splice(21, 0, 'manual');
+        shipRow.splice(22, 0, 'TRUE');
+        shipRow.splice(23, 0, 'FALSE');
+        shipRow.splice(24, 0, 'FALSE');
+        shipRow.splice(25, 0, Math.ceil(shipPrice));
+        shipRow.splice(26, 0, Math.ceil(shipPrice/0.6));
+        shipRow.splice(29, 0, '1');
+        
+        var airPrice = getLandedPrice(airRow[PRICE_COL], airRow[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, 'Air');
+        airRow.splice(3, 0, VENDOR);
+        airRow.splice(4, 0, TYPE);
+        airRow.splice(5, 0, TAG);
+        airRow.splice(6, 0, 'TRUE');
+        airRow.splice(7, 0, 'Delivery Type');
+        airRow.splice(8, 0, 'ETA 14 Days');
+        airRow.splice(12, 0, 'Color');
+        airRow.splice(14, 0, 'Size');
+        airRow.splice(19, 0, 'deny');
+        airRow.splice(20, 0, '10000');
+        airRow.splice(21, 0, 'manual');
+        airRow.splice(22, 0, 'TRUE');
+        airRow.splice(23, 0, 'FALSE');
+        airRow.splice(24, 0, 'FALSE');
+        airRow.splice(25, 0, Math.ceil(airPrice));
+        airRow.splice(26, 0, Math.ceil(airPrice/0.6));
+        airRow.splice(29, 0, '1');
       
-        subOutput.push(airRow);
-        subOutput.push(shipRow);
+        subOutput.push(shipRow.slice(0, 30));
+        subOutput.push(airRow.slice(0, 30));
       }
+      for(j = IMAGE_COL + 1; j < row.length; j++) {
+        if(! row[j]) break;
+        var newRow = [row[0]];
+        for(var k = 1; k < 30; k++) newRow[k] = null;
+        newRow[28] = row[j];
+        newRow[29] = j - IMAGE_COL + 1;
+        subOutput.push(newRow);
+      }      
       outputSheet.getRange(count + 1, 1, subOutput.length, subOutput[0].length).setValues(subOutput);
       count = count + subOutput.length;
       configSheet.getRange(INDEX_PUSH_BUTTON, 2, 4, 1).setValues([['IN_PROGRESS'], [i], [count], [(new Date().getTime() - ts)/1000 + 's']]);
@@ -117,6 +180,6 @@ function getLandedPrice(price, weight, customDuty, gst, mode) {
   
   var commission = 0.1 * inrPrice;         // Our Commission
   
-  return Math.ceil(cif + custom + igst + commission);
+  return cif + custom + igst + commission;
   
 }
