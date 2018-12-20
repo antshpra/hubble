@@ -9,14 +9,16 @@ function myFunction() {
 
   var INPUT_SHEET        = config[0][0];
   var OUTPUT_SHEET       = config[1][0];
-  var HEAD_ROWS          = config[2][0];
-  var SKU_COL            = config[3][0].charCodeAt(0) - 65;
-  var COLOR_COL          = config[4][0].charCodeAt(0) - 65;
-  var SIZE_COL           = config[5][0].charCodeAt(0) - 65;
-  var PRICE_COL          = config[6][0].charCodeAt(0) - 65;
-  var WEIGHT_COL         = config[7][0].charCodeAt(0) - 65;
-  var IMAGE_COL          = config[8][0].charCodeAt(0) - 65;
-  var SPLIT_COLS         = config[9][0];
+
+  var HANDLE_COL         = 0;  
+  var BODY_COL           = 1;  
+  var COLOR_COL          = 2;
+  var SIZE_COL           = 3;
+  var SKU_COL            = 4;
+  var WEIGHT_COL         = 5;
+  var PRICE_COL          = 6;
+  var IMAGE_COL          = 7;
+  
   var VENDOR             = config[10][0];
   var TYPE               = config[11][0];
   var TAG                = config[12][0];
@@ -24,8 +26,6 @@ function myFunction() {
   var GST_RATE           = config[14][0];
   var PUSH_BUTTON        = config[15][0];
   var INDEX_PUSH_BUTTON  = 16;
-  var INDEX_OUTPUT_COUNT = 17;
-  var INDEX_INPUT_COUNT  = 18;
   
   if(PUSH_BUTTON != 'START') return;
 
@@ -41,128 +41,137 @@ function myFunction() {
   var numCols = inputSheet.getMaxColumns();
   
   var input = inputSheet.getRange(1, 1, numRows, numCols).getValues();
+
   
-  var colsToSplit = SPLIT_COLS.trim().split(',');
-  var indexesToSplit = [];
-  for(var i = 0; i < colsToSplit.length; i++) {
-    var col = colsToSplit[i].trim();
-    if(col)
-      indexesToSplit.push(col.charCodeAt(0) - 65);
-  }
-
-
   // Output Sheet
   var outputSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(OUTPUT_SHEET);
   outputSheet.clear();
-  var count = 0;
+  
+  var headRow = [
+    'Handle',
+    'Title',
+    'Body (HTML)',
+    'Vendor',
+    'Type',
+    'Tags',
+    'Published',
+    'Option1 Name',
+    'Option1 Value',
+    'Option2 Name',
+    'Option2 Value',
+    'Option3 Name',
+    'Option3 Value',
+    'Variant SKU',
+    'Variant Grams',
+    'Variant Inventory Tracker',
+    'Variant Inventory Qty',
+    'Variant Inventory Policy',
+    'Variant Fulfillment Service',
+    'Variant Price',
+    'Variant Compare At Price',
+    'Variant Requires Shipping',
+    'Variant Taxable',
+    'Variant Barcode',
+    'Image Src',
+    'Image Position'
+    ];
+  outputSheet.getRange(1, 1, 1, headRow.length).setValues([headRow]);
 
-  for(var i = 0; i < input.length; i++) {
+  var count = 1;
+  
+  for(var i = 1; i < input.length; i++) { // Input Rows Loop
+    
     var row = input[i];
-    if(i < HEAD_ROWS) { // Directly inject head rows
-      row.splice(3, 0, 'Vendor');
-      row.splice(4, 0, 'Type');
-      row.splice(5, 0, 'Tag');
-      row.splice(6, 0, 'Published');
-      row.splice(7, 0, 'Option 1 Name');
-      row.splice(8, 0, 'Option 1 Value');
-      row.splice(12, 0, 'Option 2 Name');
-      row.splice(14, 0, 'Option 3 Name');
-      row.splice(19, 0, 'Variant Inventory Policy');
-      row.splice(20, 0, 'Inventory Qty');
-      row.splice(21, 0, 'Variant Fulfillment Service');
-      row.splice(22, 0, 'Variant Requires Shipping'); 
-      row.splice(23, 0, 'Variant Taxable');
-      row.splice(24, 0, 'Google Shopping / MPN');
-      row.splice(25, 0, 'Variant Price');
-      row.splice(26, 0, 'Variant Compare At Price');
-      row.splice(29, 0, 'Image Position');
-      outputSheet.appendRow(row.slice(0, 30));
-      count++;
-    } else if(! row[0]) break; // Skip empty rows
-    else {
-      var subInput = [row];
-      var subOutput = [];
-      for(var j = 0; j < indexesToSplit.length; j++) { // Looping by indexesToSplit
-        for(var k = 0; k < subInput.length; k++) {
-          var variants = subInput[k][indexesToSplit[j]].trim().split(',');
-          for(var l = 0; l < variants.length; l++) {
-            var variant = variants[l].trim();
-            if(! variant) continue;
-            var newRow = subInput[k].slice();
-            newRow[indexesToSplit[j]] = variant;
-            subOutput.push(newRow);
-          }
-        }
-        subInput = subOutput;
-        subOutput = [];
-      }
-      for(var j = 0; j < subInput.length; j++) {
-        var shipRow = subInput[j];
-        var airRow = shipRow.slice();
-        
-        shipRow[SKU_COL] = shipRow[SKU_COL] + '_' + shipRow[COLOR_COL] + '_' + shipRow[SIZE_COL] + '_eta40days';
-        shipRow[SKU_COL] = shipRow[SKU_COL].replace(/ /gi, '_');
-        
-        airRow[SKU_COL] = airRow[SKU_COL] + '_' + airRow[COLOR_COL] + '_' + airRow[SIZE_COL] + '_eta14days';
-        airRow[SKU_COL] = airRow[SKU_COL].replace(/ /gi, '_');
-        
-        var shipPrice = getLandedPrice(shipRow[PRICE_COL], shipRow[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, 'Ship');
-        shipRow.splice(3, 0, VENDOR);
-        shipRow.splice(4, 0, TYPE);
-        shipRow.splice(5, 0, TAG);
-        shipRow.splice(6, 0, 'TRUE');
-        shipRow.splice(7, 0, 'Delivery Type');
-        shipRow.splice(8, 0, 'ETA 40 Days');
-        shipRow.splice(12, 0, 'Color');
-        shipRow.splice(14, 0, 'Size');
-        shipRow.splice(19, 0, 'deny');
-        shipRow.splice(20, 0, '10000');
-        shipRow.splice(21, 0, 'manual');
-        shipRow.splice(22, 0, 'TRUE');
-        shipRow.splice(23, 0, 'FALSE');
-        shipRow.splice(24, 0, 'FALSE');
-        shipRow.splice(25, 0, Math.ceil(shipPrice));
-        shipRow.splice(26, 0, Math.ceil(shipPrice/0.6));
-        shipRow.splice(29, 0, '1');
-        
-        var airPrice = getLandedPrice(airRow[PRICE_COL], airRow[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, 'Air');
-        airRow.splice(3, 0, VENDOR);
-        airRow.splice(4, 0, TYPE);
-        airRow.splice(5, 0, TAG);
-        airRow.splice(6, 0, 'TRUE');
-        airRow.splice(7, 0, 'Delivery Type');
-        airRow.splice(8, 0, 'ETA 14 Days');
-        airRow.splice(12, 0, 'Color');
-        airRow.splice(14, 0, 'Size');
-        airRow.splice(19, 0, 'deny');
-        airRow.splice(20, 0, '10000');
-        airRow.splice(21, 0, 'manual');
-        airRow.splice(22, 0, 'TRUE');
-        airRow.splice(23, 0, 'FALSE');
-        airRow.splice(24, 0, 'FALSE');
-        airRow.splice(25, 0, Math.ceil(airPrice));
-        airRow.splice(26, 0, Math.ceil(airPrice/0.6));
-        airRow.splice(29, 0, '1');
+    if(! row[0]) break; // Skip empty rows
+    var output = [];
+
+    var colors = row[COLOR_COL].trim().split(',');
+    for(var c = 0; c < colors.length; c++) { // Color Loop
+      var color = colors[c].trim();
+      if(! color) continue;
       
-        subOutput.push(shipRow.slice(0, 30));
-        subOutput.push(airRow.slice(0, 30));
-      }
-      for(j = IMAGE_COL + 1; j < row.length; j++) {
-        if(! row[j]) break;
-        var newRow = [row[0]];
-        for(var k = 1; k < 30; k++) newRow[k] = null;
-        newRow[28] = row[j];
-        newRow[29] = j - IMAGE_COL + 1;
-        subOutput.push(newRow);
-      }      
-      outputSheet.getRange(count + 1, 1, subOutput.length, subOutput[0].length).setValues(subOutput);
-      count = count + subOutput.length;
-      configSheet.getRange(INDEX_PUSH_BUTTON, 2, 4, 1).setValues([['IN_PROGRESS'], [i], [count], [(new Date().getTime() - ts)/1000 + 's']]);
+      var sizes = row[SIZE_COL].trim().split(',');
+      for(var s = 0; s < sizes.length; s++) { // Size Loop
+        var size = sizes[s].trim();
+        if(! size) continue;
+        
+        var modes = ['Ship', 'Air']
+        for(var m = 0; m < modes.length; m++) { // Delivery Mode Loop
+          var mode = modes[m];
+
+          var newRow = [];
+          for(var j = 0; j < row.length; j++) {
+            if(j == HANDLE_COL) {
+              newRow.push(row[j]);
+              newRow.push(row[j]); // Title
+            } else if(j == BODY_COL) {
+              newRow.push(row[j]);
+              newRow.push(VENDOR);
+              newRow.push(TYPE);
+              newRow.push(TAG);
+              newRow.push('FALSE'); // Published
+            } else if(j == COLOR_COL) {
+              newRow.push('Delivery Type'); // Option1 Name
+              newRow.push(mode == 'Air' ? 'ETA 14 Days' : 'ETA 40 Days');
+              newRow.push('Color'); // Option2 Name
+              newRow.push(color);
+            } else if(j == SIZE_COL) {
+              newRow.push('Size'); // Option3 Name
+              newRow.push(size);
+            } else if(j == SKU_COL) {
+              newRow.push((row[j] + '_' + color + '_' + size + (mode == 'Air' ? '_eta14days' : '_eta40days')).replace(/ /gi, '_'));
+            } else if(j == WEIGHT_COL) {
+              newRow.push(row[j]);
+              newRow.push(null);     // Variant Inventory Tracker
+              newRow.push('10000');  // Variant Inventory Qty
+              newRow.push('deny');   // Variant Inventory Policy
+              newRow.push('manual'); // Variant Fulfillment Service
+            } else if(j == PRICE_COL) {
+              var price = getLandedPrice(row[PRICE_COL], row[WEIGHT_COL], CUSTOM_DUTY, GST_RATE, mode);
+              newRow.push(Math.ceil(price));
+              newRow.push(Math.ceil(price/0.6));
+              newRow.push('TRUE');  // Variant Requires Shipping
+              newRow.push('FALSE'); // Variant Taxable
+              newRow.push(null);
+            } else if(j == IMAGE_COL) {
+              newRow.push(row[j]);
+              newRow.push(1);
+//            } else if(j >= IMAGE_COL) {
+//              if(! row[j]) break;
+//              var imgRow = [row[HANDLE_COL]];
+//              for(var k = 1; k < newRow.length - 2; k++) imgRow[k] = null;
+//              imgRow[newRow.length - 2] = row[j];
+//              imgRow[newRow.length - 1] = j - IMAGE_COL + 1;
+//              output.push(imgRow);
+            }
+          
+          }
+          
+          output.push(newRow);
+        
+        } // END: Delivery Mode Loop
+        
+      } // END: Size Loop
+      
+    } // END: Color Loop
+
+
+    for(var j = IMAGE_COL + 1; row[j]; j++) {
+      var imgRow = [row[HANDLE_COL]];
+      for(var k = 1; k < headRow.length - 2; k++) imgRow[k] = null;
+      imgRow[headRow.length - 2] = row[j];
+      imgRow[headRow.length - 1] = j - IMAGE_COL + 1;
+      output.push(imgRow);
     }
-  }
+              
+    outputSheet.getRange(count + 1, 1, output.length, headRow.length).setValues(output);
+    count = count + output.length;
+    configSheet.getRange(INDEX_PUSH_BUTTON, 2, 4, 1).setValues([['IN_PROGRESS'], [i], [count], [(new Date().getTime() - ts)/1000 + 's']]);
+
+  } // END: Input Rows Loop
   
   configSheet.getRange(INDEX_PUSH_BUTTON, 2, 1, 1).setValues([['DONE']]);
-
+  
 }
 
 
